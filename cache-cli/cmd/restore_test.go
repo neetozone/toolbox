@@ -196,7 +196,7 @@ func Test__AutomaticRestore(t *testing.T) {
 
 			// storing
 			checksum, _ := files.GenerateChecksum("Gemfile.lock")
-			key := fmt.Sprintf("gems-master-%s", checksum)
+			key := fmt.Sprintf("master-%s-%s", gemsKeyPrefix, checksum)
 			compressedFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%d", key, time.Now().Nanosecond()))
 			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
 			archiver.Compress(compressedFile, "vendor/bundle")
@@ -224,7 +224,7 @@ func Test__AutomaticRestore(t *testing.T) {
 
 			// storing
 			checksum, _ := files.GenerateChecksum("Gemfile.lock")
-			key := fmt.Sprintf("gems-some-development-branch-%s", checksum)
+			key := fmt.Sprintf("some-development-branch-%s-%s", gemsKeyPrefix, checksum)
 			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
 			compressedFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%d", key, time.Now().Nanosecond()))
 			archiver.Compress(compressedFile, "vendor/bundle")
@@ -237,6 +237,32 @@ func Test__AutomaticRestore(t *testing.T) {
 			assert.Contains(t, output, "Detected Gemfile.lock")
 			assert.Contains(t, output, fmt.Sprintf("Downloading key '%s'", key))
 			assert.Contains(t, output, fmt.Sprintf("Restored: %s", filepath.FromSlash("vendor/bundle")))
+
+			os.RemoveAll("vendor")
+			os.Remove(compressedFile)
+		})
+
+		t.Run(fmt.Sprintf("%s does not restore another directory's archive", backend), func(t *testing.T) {
+			storage.Clear()
+
+			os.Chdir(fmt.Sprintf("%s/test/autocache/gems", rootPath))
+			os.Setenv("NEETO_CI_GIT_BRANCH", "")
+			os.Setenv("NEETO_CI_GIT_PR_BRANCH", "some-development-branch")
+			os.MkdirAll("vendor/bundle", os.ModePerm)
+
+			// stored by the repository root, so its key is unscoped
+			checksum, _ := files.GenerateChecksum("Gemfile.lock")
+			key := fmt.Sprintf("main-gems-%s", checksum)
+			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
+			compressedFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%d", key, time.Now().Nanosecond()))
+			archiver.Compress(compressedFile, "vendor/bundle")
+			storage.Store(key, compressedFile)
+
+			RunRestore(restoreCmd, []string{})
+			output := readOutputFromFile(t)
+
+			assert.Contains(t, output, fmt.Sprintf("MISS: 'main-%s'.", gemsKeyPrefix))
+			assert.NotContains(t, output, "Downloading key")
 
 			os.RemoveAll("vendor")
 			os.Remove(compressedFile)
