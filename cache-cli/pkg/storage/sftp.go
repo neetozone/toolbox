@@ -2,8 +2,10 @@ package storage
 
 import (
 	"io/ioutil"
+	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -75,13 +77,31 @@ func createSSHClient(options SFTPStorageOptions) (*ssh.Client, error) {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	sshClient, err := ssh.Dial("tcp", options.URL, config)
+	sshClient, err := dialSSH(options.URL, config, httpTimeoutsFromEnv().Header)
 	if err != nil {
 		log.Errorf("Error dialing ssh: %v", err)
 		return nil, err
 	}
 
 	return sshClient, nil
+}
+
+// dialSSH is ssh.Dial with bounded connect and handshake times.
+func dialSSH(address string, config *ssh.ClientConfig, handshakeTimeout time.Duration) (*ssh.Client, error) {
+	conn, err := net.DialTimeout("tcp", address, dialTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = conn.SetDeadline(time.Now().Add(handshakeTimeout))
+	clientConn, channels, requests, err := ssh.NewClientConn(conn, address, config)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+
+	_ = conn.SetDeadline(time.Time{})
+	return ssh.NewClient(clientConn, channels, requests), nil
 }
 
 func resolvePath(path string) string {
