@@ -52,7 +52,7 @@ func createDefaultS3Storage(s3Bucket, project string, storageConfig StorageConfi
 		}
 
 		return &S3Storage{
-			Client:        s3.NewFromConfig(config),
+			Client:        s3.NewFromConfig(config, withS3Timeouts),
 			Bucket:        s3Bucket,
 			Project:       project,
 			StorageConfig: storageConfig,
@@ -69,7 +69,7 @@ func createDefaultS3Storage(s3Bucket, project string, storageConfig StorageConfi
 		}
 
 		return &S3Storage{
-			Client:        s3.NewFromConfig(config),
+			Client:        s3.NewFromConfig(config, withS3Timeouts),
 			Bucket:        s3Bucket,
 			Project:       project,
 			StorageConfig: storageConfig,
@@ -83,7 +83,7 @@ func createDefaultS3Storage(s3Bucket, project string, storageConfig StorageConfi
 	}
 
 	return &S3Storage{
-		Client:        s3.NewFromConfig(config),
+		Client:        s3.NewFromConfig(config, withS3Timeouts),
 		Bucket:        s3Bucket,
 		Project:       project,
 		StorageConfig: storageConfig,
@@ -107,7 +107,7 @@ func createS3StorageUsingEndpoint(s3Bucket, project, s3Url string, storageConfig
 		return nil, err
 	}
 
-	svc := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	svc := s3.NewFromConfig(cfg, withS3Timeouts, func(o *s3.Options) {
 		o.UsePathStyle = true
 	})
 
