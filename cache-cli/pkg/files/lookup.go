@@ -63,6 +63,11 @@ func Lookup(options LookupOptions) []LookupResult {
 		lockFilePath := fmt.Sprintf("%s/%s", lookupDirectory, lockFile)
 		if _, err := os.Stat(lockFilePath); err == nil {
 			resultForFile := resultForfile(lockFilePath, scope, options)
+			if resultForFile == nil {
+				log.Warnf("Skipping %s: no cache keys could be generated for it.", lockFilePath)
+				continue
+			}
+
 			results = append(results, *resultForFile)
 		}
 	}
@@ -165,7 +170,7 @@ func buildResult(filePath, scope string, options LookupOptions, entries []buildR
 
 	checksum, err := GenerateChecksum(filePath)
 	if err != nil {
-		log.Errorf("Error generating checksum for %s: %v", filePath, err)
+		log.Warnf("Error generating checksum for %s: %v", filePath, err)
 		return nil
 	}
 

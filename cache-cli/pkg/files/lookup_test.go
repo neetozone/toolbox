@@ -815,3 +815,28 @@ func Test__GemsKeyRubyVersion(t *testing.T) {
 		assert.Equal(t, "gems-"+runtime.GOARCH, gemsKeyPrefix(dir))
 	})
 }
+
+func Test__LookupSkipsUnreadableLockFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("chmod 000 does not block root")
+	}
+
+	dir := t.TempDir()
+	unreadable := filepath.Join(dir, "package-lock.json")
+	assert.Nil(t, os.WriteFile(unreadable, []byte("{}"), 0600))
+	assert.Nil(t, os.WriteFile(filepath.Join(dir, "go.sum"), []byte("sum"), 0600))
+	assert.Nil(t, os.Chmod(unreadable, 0000))
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0600) })
+
+	for _, restore := range []bool{false, true} {
+		results := Lookup(LookupOptions{
+			LookupDirectory: dir,
+			GitBranch:       "feature",
+			Restore:         restore,
+		})
+
+		if assert.Len(t, results, 1) {
+			assert.Equal(t, "go.sum", results[0].DetectedFile)
+		}
+	}
+}

@@ -194,13 +194,33 @@ func FindGitRoot() string {
 	return runGit("rev-parse", "--show-toplevel")
 }
 
+var gitWarningOnce sync.Once
+
 func runGit(args ...string) string {
 	output, err := exec.Command("git", args...).Output()
 	if err != nil {
+		gitWarningOnce.Do(func() { log.Warn(gitFailureMessage(args, err)) })
 		return ""
 	}
 
 	return strings.TrimSpace(string(output))
+}
+
+func gitFailureMessage(args []string, err error) string {
+	reason := err.Error()
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if line := strings.TrimSpace(strings.SplitN(string(exitErr.Stderr), "\n", 2)[0]); line != "" {
+			reason = line
+		}
+	}
+
+	message := fmt.Sprintf("git %s failed: %s; automatic cache keys are not scoped by directory", strings.Join(args, " "), reason)
+	// Never bypass safe.directory: it guards against attacker-controlled repo config.
+	if strings.Contains(reason, "dubious ownership") {
+		message += "; make the checkout owned by the user running 'cache'"
+	}
+
+	return message
 }
 
 func init() {
