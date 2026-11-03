@@ -37,6 +37,7 @@ func NewStoreCommand() *cobra.Command {
 	`, strings.Join(storage.ValidSortByKeys, ","))
 
 	cmd.Flags().StringP("cleanup-by", "c", storage.SortByStoreTime, description)
+	addOnlyFlag(cmd)
 	return cmd
 }
 
@@ -46,6 +47,9 @@ func RunStore(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
 		return
 	}
+
+	types, err := onlyTypes(cmd, args)
+	exitOnUsageError(cmd, err)
 
 	cleanupBy, err := cmd.Flags().GetString("cleanup-by")
 	utils.Check(err)
@@ -65,12 +69,12 @@ func RunStore(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		lookupResults := files.Lookup(files.LookupOptions{
+		lookupResults := lookupAutomatic(files.LookupOptions{
 			RootDirectory: FindGitRoot(),
 			GitBranch:     gitBranch,
 			DefaultBranch: os.Getenv("NEETO_CI_DEFAULT_BRANCH"),
 			Restore:       false,
-		})
+		}, types)
 
 		if len(lookupResults) == 0 {
 			log.Info("Nothing to store in cache.")
