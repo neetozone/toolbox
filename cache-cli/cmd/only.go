@@ -50,10 +50,14 @@ func lookupAutomatic(options files.LookupOptions, types []string) []files.Lookup
 		return files.Lookup(options)
 	}
 
-	results, missing := files.LookupTypes(options, types)
-	for _, entryType := range missing {
+	lookup := files.LookupTypesDetailed(options, types)
+	for _, entryType := range lookup.Missing {
 		log.Infof("Skipping %s cache: no lock file for it in this directory.", entryType)
 	}
 
-	return results
+	for _, entryType := range lookup.Unreadable {
+		log.Warnf("Skipping %s cache: its lock file exists but could not be read.", entryType)
+	}
+
+	return lookup.Results
 }

@@ -149,3 +149,24 @@ func Test__OnlyStoreAndRestoreWithLocalBackend(t *testing.T) {
 	assert.Contains(t, output.String(), fmt.Sprintf("HIT: 'main-gems-%s-%s'", runtime.GOARCH, checksum))
 	assert.NotContains(t, output.String(), "Detected yarn.lock")
 }
+
+func Test__LookupAutomaticSaysWhenALockFileCannotBeRead(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("chmod 000 does not block root")
+	}
+
+	dir := t.TempDir()
+	assert.Nil(t, os.WriteFile(filepath.Join(dir, "yarn.lock"), []byte("# yarn\n"), 0600))
+	assert.Nil(t, os.Chmod(filepath.Join(dir, "yarn.lock"), 0000))
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(dir, "yarn.lock"), 0600) })
+
+	buffer := captureGitWarnings(t)
+	options := files.LookupOptions{LookupDirectory: dir, RootDirectory: dir, GitBranch: "main", DefaultBranch: "main"}
+	results := lookupAutomatic(options, []string{"node-modules", "nvm"})
+
+	assert.Empty(t, results)
+	output := buffer.String()
+	assert.Contains(t, output, "Skipping node-modules cache: its lock file exists but could not be read.")
+	assert.NotContains(t, output, "Skipping node-modules cache: no lock file")
+	assert.Contains(t, output, "Skipping nvm cache: no lock file for it in this directory.")
+}

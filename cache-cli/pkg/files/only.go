@@ -82,9 +82,24 @@ func ParseEntryTypes(value string) ([]string, error) {
 	return types, nil
 }
 
+// TypeLookup is the outcome of looking up a set of entry types.
+type TypeLookup struct {
+	Results []LookupResult
+	// Types with no lock file in the directory.
+	Missing []string
+	// Types whose lock file exists but could not be read.
+	Unreadable []string
+}
+
 // LookupTypes is Lookup restricted to the given entry types.
 // It returns the results and the types that had no lock file.
 func LookupTypes(options LookupOptions, types []string) ([]LookupResult, []string) {
+	lookup := LookupTypesDetailed(options, types)
+	return lookup.Results, lookup.Missing
+}
+
+// LookupTypesDetailed is LookupTypes that also reports unreadable lock files.
+func LookupTypesDetailed(options LookupOptions, types []string) TypeLookup {
 	lookupDirectory := options.LookupDirectory
 	if lookupDirectory == "" {
 		lookupDirectory, _ = os.Getwd()
@@ -97,6 +112,7 @@ func LookupTypes(options LookupOptions, types []string) ([]LookupResult, []strin
 	}
 
 	found := map[string]bool{}
+	unreadable := map[string]bool{}
 	results := []LookupResult{}
 	for _, lockFile := range lockFiles {
 		if !anySelected(lockFileTypes[lockFile], selected) {
@@ -108,10 +124,16 @@ func LookupTypes(options LookupOptions, types []string) ([]LookupResult, []strin
 			continue
 		}
 
-		if result := resultForfile(lockFilePath, scope, options); result != nil {
-			if filtered := filterEntries(*result, selected, found); len(filtered.Entries) > 0 {
-				results = append(results, filtered)
+		result := resultForfile(lockFilePath, scope, options)
+		if result == nil {
+			for _, entryType := range lockFileTypes[lockFile] {
+				unreadable[entryType] = true
 			}
+			continue
+		}
+
+		if filtered := filterEntries(*result, selected, found); len(filtered.Entries) > 0 {
+			results = append(results, filtered)
 		}
 	}
 
@@ -126,20 +148,29 @@ func LookupTypes(options LookupOptions, types []string) ([]LookupResult, []strin
 			continue
 		}
 
-		if result := buildResult(lockFilePath, scope, options, []buildResultRequest{request}); result != nil {
-			found[entryType] = true
-			results = appendResult(results, *result)
+		result := buildResult(lockFilePath, scope, options, []buildResultRequest{request})
+		if result == nil {
+			unreadable[entryType] = true
+			continue
 		}
+
+		found[entryType] = true
+		results = appendResult(results, *result)
 	}
 
 	missing := []string{}
+	unreadableTypes := []string{}
 	for _, entryType := range types {
-		if !found[entryType] {
+		switch {
+		case found[entryType]:
+		case unreadable[entryType]:
+			unreadableTypes = append(unreadableTypes, entryType)
+		default:
 			missing = append(missing, entryType)
 		}
 	}
 
-	return dropShadowedPaths(results), missing
+	return TypeLookup{Results: dropShadowedPaths(results), Missing: missing, Unreadable: unreadableTypes}
 }
 
 // Entries for an already detected lock file join its result.

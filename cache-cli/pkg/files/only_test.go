@@ -150,3 +150,25 @@ func Test__LookupTypes(t *testing.T) {
 		}, keys)
 	})
 }
+
+func Test__LookupTypesDetailedReportsUnreadableLockFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("chmod 000 does not block root")
+	}
+
+	dir := t.TempDir()
+	writeLockFiles(t, dir, map[string]string{"yarn.lock": "# yarn\n", "Gemfile.lock": "GEM\n"})
+	assert.Nil(t, os.Chmod(filepath.Join(dir, "yarn.lock"), 0000))
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(dir, "yarn.lock"), 0600) })
+
+	options := LookupOptions{LookupDirectory: dir, HomeDirectory: t.TempDir(), GitBranch: "main", DefaultBranch: "main"}
+	lookup := LookupTypesDetailed(options, []string{"node-modules", "gems", "nvm"})
+
+	assert.Equal(t, []string{"node-modules"}, lookup.Unreadable)
+	assert.Equal(t, []string{"nvm"}, lookup.Missing)
+	assert.Len(t, lookup.Results, 1)
+
+	results, missing := LookupTypes(options, []string{"node-modules", "gems", "nvm"})
+	assert.Len(t, results, 1)
+	assert.Equal(t, []string{"nvm"}, missing)
+}
