@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -58,9 +59,17 @@ func RunStore(cmd *cobra.Command, args []string) {
 	archiver := archive.NewArchiver(metricsManager)
 
 	if len(args) == 0 {
+		gitBranch := FindGitBranch()
+		if gitBranch == "" {
+			log.Info("Skipping automatic store: could not determine the git branch.")
+			return
+		}
+
 		lookupResults := files.Lookup(files.LookupOptions{
-			GitBranch: FindGitBranch(),
-			Restore:   false,
+			RootDirectory: FindGitRoot(),
+			GitBranch:     gitBranch,
+			DefaultBranch: os.Getenv("NEETO_CI_DEFAULT_BRANCH"),
+			Restore:       false,
 		})
 
 		if len(lookupResults) == 0 {
@@ -167,7 +176,31 @@ func FindGitBranch() string {
 		return gitPrBranch
 	}
 
-	return os.Getenv("NEETO_CI_GIT_BRANCH")
+	gitBranch := os.Getenv("NEETO_CI_GIT_BRANCH")
+	if gitBranch != "" {
+		return gitBranch
+	}
+
+	// A detached HEAD reports 'HEAD', which names no branch.
+	checkedOutBranch := runGit("rev-parse", "--abbrev-ref", "HEAD")
+	if checkedOutBranch == "HEAD" {
+		return ""
+	}
+
+	return checkedOutBranch
+}
+
+func FindGitRoot() string {
+	return runGit("rev-parse", "--show-toplevel")
+}
+
+func runGit(args ...string) string {
+	output, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(output))
 }
 
 func init() {

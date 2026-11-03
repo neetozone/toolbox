@@ -11,6 +11,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	checksumPattern       = regexp.MustCompile(`^[0-9a-f]{32}$`)
+	unsafeScopeCharacters = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+)
+
 var lockFiles = []string{
 	".nvmrc",
 	"Gemfile.lock",
@@ -27,7 +32,9 @@ var lockFiles = []string{
 type LookupOptions struct {
 	LookupDirectory string
 	HomeDirectory   string
+	RootDirectory   string
 	GitBranch       string
+	DefaultBranch   string
 	Restore         bool
 }
 
@@ -49,11 +56,13 @@ func Lookup(options LookupOptions) []LookupResult {
 		lookupDirectory, _ = os.Getwd()
 	}
 
+	scope := directoryScope(options.RootDirectory, lookupDirectory)
+
 	results := []LookupResult{}
 	for _, lockFile := range lockFiles {
 		lockFilePath := fmt.Sprintf("%s/%s", lookupDirectory, lockFile)
 		if _, err := os.Stat(lockFilePath); err == nil {
-			resultForFile := resultForfile(lockFilePath, options)
+			resultForFile := resultForfile(lockFilePath, scope, options)
 			results = append(results, *resultForFile)
 		}
 	}
@@ -61,7 +70,33 @@ func Lookup(options LookupOptions) []LookupResult {
 	return results
 }
 
-func resultForfile(filePath string, options LookupOptions) *LookupResult {
+// Keys from a nested directory carry its repository-relative path, so a
+// fallback for one directory never restores another directory's archive.
+// The repository root keeps unscoped keys.
+func directoryScope(rootDirectory, lookupDirectory string) string {
+	if rootDirectory == "" {
+		return ""
+	}
+
+	root, err := filepath.EvalSymlinks(rootDirectory)
+	if err != nil {
+		return ""
+	}
+
+	directory, err := filepath.EvalSymlinks(lookupDirectory)
+	if err != nil {
+		return ""
+	}
+
+	relative, err := filepath.Rel(root, directory)
+	if err != nil || relative == "." || strings.HasPrefix(relative, "..") {
+		return ""
+	}
+
+	return unsafeScopeCharacters.ReplaceAllString(filepath.ToSlash(relative), "-")
+}
+
+func resultForfile(filePath, scope string, options LookupOptions) *LookupResult {
 	homedir := options.HomeDirectory
 	if homedir == "" {
 		homedir, _ = os.UserHomeDir()
@@ -71,47 +106,47 @@ func resultForfile(filePath string, options LookupOptions) *LookupResult {
 
 	switch file {
 	case ".nvmrc":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"nvm", fmt.Sprintf("%s/.nvm", homedir)},
 		})
 	case "Gemfile.lock":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{gemsKeyPrefix(filepath.Dir(filePath)), "vendor/bundle"},
 		})
 	case "package-lock.json":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"node-modules", "node_modules"},
 		})
 	case "yarn.lock":
 		// Only node_modules is cached: it makes `yarn install` instant on a
 		// cache hit, so restoring ~/.cache/yarn (~1.4 GB) adds no benefit.
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"node-modules", "node_modules"},
 		})
 	case "mix.lock":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"mix-deps", "deps"},
 			{"mix-build", "_build"},
 		})
 	case "requirements.txt":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"requirements", ".pip_cache"},
 		})
 	case "composer.lock":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"composer", "vendor"},
 		})
 	case "pom.xml":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"maven", ".m2"},
 			{"maven-target", "target"},
 		})
 	case "Podfile.lock":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"pods", "Pods"},
 		})
 	case "go.sum":
-		return buildResult(filePath, options, []buildResultRequest{
+		return buildResult(filePath, scope, options, []buildResultRequest{
 			{"go", fmt.Sprintf("%s/go/pkg/mod", homedir)},
 		})
 	default:
@@ -125,11 +160,8 @@ type buildResultRequest struct {
 	Path      string
 }
 
-func buildResult(filePath string, options LookupOptions, entries []buildResultRequest) *LookupResult {
+func buildResult(filePath, scope string, options LookupOptions, entries []buildResultRequest) *LookupResult {
 	gitBranch := options.GitBranch
-	if gitBranch == "" {
-		gitBranch = "master"
-	}
 
 	checksum, err := GenerateChecksum(filePath)
 	if err != nil {
@@ -139,17 +171,19 @@ func buildResult(filePath string, options LookupOptions, entries []buildResultRe
 
 	newEntries := []LookupResultEntry{}
 	for _, entry := range entries {
+		keyPrefix := scopedKeyPrefix(entry, scope)
+
 		if options.Restore {
 			newEntries = append(newEntries, LookupResultEntry{
 				Path: filepath.FromSlash(entry.Path),
-				Keys: keysForRestore(entry.KeyPrefix, gitBranch, checksum),
+				Keys: keysForRestore(keyPrefix, gitBranch, checksum, defaultBranches(options)),
 			})
 		} else {
-			key := fmt.Sprintf("%s-%s-%s", gitBranch, entry.KeyPrefix, checksum)
+			key := fmt.Sprintf("%s-%s-%s", gitBranch, keyPrefix, checksum)
 			newEntries = append(newEntries, LookupResultEntry{
 				Keys:           []string{key},
 				Path:           filepath.FromSlash(entry.Path),
-				EquivalentKeys: equivalentKeys(entry.KeyPrefix, gitBranch, checksum),
+				EquivalentKeys: equivalentKeys(keyPrefix, gitBranch, checksum, defaultBranches(options)),
 			})
 		}
 	}
@@ -160,27 +194,56 @@ func buildResult(filePath string, options LookupOptions, entries []buildResultRe
 	}
 }
 
-func keysForRestore(keyPrefix, gitBranch, checksum string) []string {
-	keys := []string{fmt.Sprintf("%s-%s-%s", gitBranch, keyPrefix, checksum)}
-
-	// Exact default-branch keys: a single HEAD hit, no listing needed.
-	keys = append(keys, equivalentKeys(keyPrefix, gitBranch, checksum)...)
-	keys = append(keys, fmt.Sprintf("%s-%s", gitBranch, keyPrefix))
-
-	if gitBranch != "master" {
-		keys = append(keys, fmt.Sprintf("master-%s", keyPrefix))
+// Paths outside the directory, like ~/.nvm, hold the same content whichever
+// directory restores them, so only relative paths are scoped.
+func scopedKeyPrefix(entry buildResultRequest, scope string) string {
+	if scope == "" || filepath.IsAbs(entry.Path) {
+		return entry.KeyPrefix
 	}
 
-	if gitBranch != "main" {
-		keys = append(keys, fmt.Sprintf("main-%s", keyPrefix))
+	return fmt.Sprintf("%s@%s", entry.KeyPrefix, scope)
+}
+
+func defaultBranches(options LookupOptions) []string {
+	if options.DefaultBranch != "" {
+		return []string{options.DefaultBranch}
+	}
+
+	return []string{"main", "master"}
+}
+
+func keysForRestore(keyPrefix, gitBranch, checksum string, defaultBranches []string) []string {
+	keys := []string{}
+	if gitBranch != "" {
+		keys = append(keys, fmt.Sprintf("%s-%s-%s", gitBranch, keyPrefix, checksum))
+	}
+
+	// Exact default-branch keys: a single HEAD hit, no listing needed.
+	keys = append(keys, equivalentKeys(keyPrefix, gitBranch, checksum, defaultBranches)...)
+	if gitBranch != "" {
+		keys = append(keys, fmt.Sprintf("%s-%s", gitBranch, keyPrefix))
+	}
+
+	for _, defaultBranch := range defaultBranches {
+		if defaultBranch != gitBranch {
+			keys = append(keys, fmt.Sprintf("%s-%s", defaultBranch, keyPrefix))
+		}
 	}
 
 	return keys
 }
 
-func equivalentKeys(keyPrefix, gitBranch, checksum string) []string {
+// Automatic fallback keys only match '<fallback>-<checksum>', so
+// 'main-node-modules' matches neither 'main-node-modules@e2e-<checksum>' nor
+// 'release-main-node-modules-<checksum>'.
+func IsAutomaticKeyFor(fallbackKey, key string) bool {
+	prefix := fallbackKey + "-"
+	return strings.HasPrefix(key, prefix) && checksumPattern.MatchString(strings.TrimPrefix(key, prefix))
+}
+
+func equivalentKeys(keyPrefix, gitBranch, checksum string, defaultBranches []string) []string {
 	keys := []string{}
-	for _, defaultBranch := range []string{"master", "main"} {
+	for _, defaultBranch := range defaultBranches {
 		if gitBranch != defaultBranch {
 			keys = append(keys, fmt.Sprintf("%s-%s-%s", defaultBranch, keyPrefix, checksum))
 		}

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -94,6 +95,24 @@ func Test__SkipStoreAndExactRestore(t *testing.T) {
 		assert.Contains(t, storeOn("some-feature"), "identical content already cached")
 	})
 
+	t.Run("a nested directory is not skipped by the root directory's key", func(t *testing.T) {
+		assert.NoError(t, store.Clear())
+		root := newProject(t, "lock-v1")
+		assert.NoError(t, exec.Command("git", "init", "-q", root).Run())
+		storeOn("master")
+
+		nested := filepath.Join(root, "e2e")
+		assert.NoError(t, os.MkdirAll(filepath.Join(nested, "vendor", "bundle"), 0755))
+		assert.NoError(t, os.WriteFile(filepath.Join(nested, "Gemfile.lock"), []byte("lock-v1"), 0600))
+		assert.NoError(t, os.WriteFile(filepath.Join(nested, "vendor", "bundle", "gem.rb"), []byte("puts 2"), 0600))
+		assert.NoError(t, os.Chdir(nested))
+
+		output := storeOn("some-feature")
+		assert.NotContains(t, output, "identical content")
+		checksum, _ := files.GenerateChecksum("Gemfile.lock")
+		assert.Contains(t, keyNames(), fmt.Sprintf("some-feature-gems-%s@e2e-%s", runtime.GOARCH, checksum))
+	})
+
 	t.Run("restore hits the exact default-branch key without a miss", func(t *testing.T) {
 		assert.NoError(t, store.Clear())
 		dir := newProject(t, "lock-v1")
@@ -131,15 +150,19 @@ func Test__SkipStoreAndExactRestore(t *testing.T) {
 	})
 }
 
-func Test__FindMatchingKeyIsLiteralPrefix(t *testing.T) {
+// Explicit keys keep regex matching; automatic fallbacks are literal and anchored.
+func Test__FindAutomaticKeyIsLiteral(t *testing.T) {
+	checksum := "a0f1a9a1d9776398da24a9857f85ccc7"
 	keys := []storage.CacheKey{
-		{Name: "feature-master-gems-arm64-abc"},
-		{Name: "master-gems-arm64-abc"},
-		{Name: "master-gems-ruby3x3x1-arm64-abc"},
+		{Name: "feature-master-gems-arm64-" + checksum},
+		{Name: "master-gems-arm64-" + checksum},
+		{Name: "master-gems-ruby3x3x1-arm64-" + checksum},
 	}
 
-	assert.Equal(t, "master-gems-arm64-abc", findMatchingKey(keys, "master-gems"))
-	assert.Equal(t, "", findMatchingKey(keys, "main-gems"))
-	assert.Equal(t, "", findMatchingKey(keys, "master-gems-ruby3.3.1"), "dots are literal, not regex wildcards")
-	assert.Equal(t, "master-gems-ruby3x3x1-arm64-abc", findMatchingKey(keys, "master-gems-ruby3x3"))
+	assert.Equal(t, "master-gems-arm64-"+checksum, findAutomaticKey(keys, "master-gems-arm64"))
+	assert.Equal(t, "", findAutomaticKey(keys, "master-gems"), "only '<fallback>-<checksum>' matches")
+	assert.Equal(t, "", findAutomaticKey(keys, "main-gems-arm64"))
+	assert.Equal(t, "", findAutomaticKey(keys, "master-gems-ruby3.3.1-arm64"), "dots are literal, not regex wildcards")
+	assert.Equal(t, "master-gems-ruby3x3x1-arm64-"+checksum, findAutomaticKey(keys, "master-gems-ruby3x3x1-arm64"))
+	assert.Equal(t, "master-gems-ruby3x3x1-arm64-"+checksum, findMatchingKey(keys, "master-gems-ruby3.3.1"))
 }

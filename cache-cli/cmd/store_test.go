@@ -119,7 +119,7 @@ func Test__AutomaticStore(t *testing.T) {
 
 			checksum, _ := files.GenerateChecksum("Gemfile.lock")
 
-			key := fmt.Sprintf("gems-master-%s", checksum)
+			key := fmt.Sprintf("master-%s-%s", gemsKeyPrefix, checksum)
 			RunStore(storeCmd, []string{})
 			output := readOutputFromFile(t)
 
@@ -141,7 +141,7 @@ func Test__AutomaticStore(t *testing.T) {
 
 			checksum, _ := files.GenerateChecksum("Gemfile.lock")
 
-			key := fmt.Sprintf("gems-some-development-branch-%s", checksum)
+			key := fmt.Sprintf("some-development-branch-%s-%s", gemsKeyPrefix, checksum)
 			RunStore(storeCmd, []string{})
 			output := readOutputFromFile(t)
 
@@ -150,6 +150,25 @@ func Test__AutomaticStore(t *testing.T) {
 			assert.Contains(t, output, fmt.Sprintf("Uploading '%s' with cache key '%s'", filepath.FromSlash("vendor/bundle"), key))
 			assert.Contains(t, output, "Upload complete")
 
+			os.RemoveAll("vendor")
+		})
+
+		t.Run(fmt.Sprintf("%s does not store without a git branch", backend), func(t *testing.T) {
+			storage.Clear()
+
+			os.Chdir(fmt.Sprintf("%s/test/autocache/gems", rootPath))
+			os.Setenv("NEETO_CI_GIT_BRANCH", "")
+			os.Setenv("NEETO_CI_GIT_PR_BRANCH", "")
+			os.Setenv("GIT_DIR", "/nonexistent")
+			os.MkdirAll("vendor/bundle", os.ModePerm)
+
+			RunStore(storeCmd, []string{})
+			output := readOutputFromFile(t)
+
+			assert.Contains(t, output, "Skipping automatic store: could not determine the git branch.")
+			assert.NotContains(t, output, "Uploading")
+
+			os.Unsetenv("GIT_DIR")
 			os.RemoveAll("vendor")
 		})
 
@@ -164,7 +183,7 @@ func Test__AutomaticStore(t *testing.T) {
 			checksum, _ := files.GenerateChecksum("Gemfile.lock")
 
 			tempFile, _ := ioutil.TempFile(os.TempDir(), "*")
-			key := fmt.Sprintf("gems-master-%s", checksum)
+			key := fmt.Sprintf("master-%s-%s", gemsKeyPrefix, checksum)
 			err := storage.Store(key, tempFile.Name())
 			assert.Nil(t, err)
 
