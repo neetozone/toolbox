@@ -2,6 +2,8 @@ package archive
 
 import (
 	"archive/tar"
+	"bufio"
+	"bytes"
 	"compress/gzip"
 	"errors"
 	"fmt"
@@ -9,22 +11,41 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	pgzip "github.com/klauspost/pgzip"
 	"github.com/semaphoreci/toolbox/cache-cli/pkg/metrics"
 	log "github.com/sirupsen/logrus"
 )
 
+// Files up to this size are buffered and written by the unpack workers.
+const maxBufferedFileSize = 1 << 20
+
+var (
+	gzipMagic = []byte{0x1f, 0x8b}
+	zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
+)
+
 type NativeArchiver struct {
 	MetricsManager metrics.MetricsManager
 	UseParallelism bool
+	// UseZstd selects zstd for Compress. Decompress detects the format itself.
+	UseZstd bool
+	// CompressionLevel is codec specific; 0 keeps the codec default.
+	CompressionLevel int
+	// UnpackWorkers > 1 writes small files concurrently in Decompress.
+	UnpackWorkers int
 }
 
 func NewNativeArchiver(metricsManager metrics.MetricsManager, useParallelism bool) *NativeArchiver {
 	return &NativeArchiver{
 		MetricsManager: metricsManager,
 		UseParallelism: useParallelism,
+		UnpackWorkers:  1,
 	}
 }
 
@@ -38,8 +59,12 @@ func (a *NativeArchiver) Compress(dst, src string) error {
 		return err
 	}
 
-	// The order is 'tar > gzip > file'
-	gzipWriter := a.newGzipWriter(dstFile)
+	// The order is 'tar > compressor > file'
+	gzipWriter, err := a.newCompressWriter(dstFile)
+	if err != nil {
+		return fmt.Errorf("error creating compressor: %v", err)
+	}
+
 	tarWriter := tar.NewWriter(gzipWriter)
 
 	// We walk through every file in the specified path, adding them to the tar archive.
@@ -98,7 +123,7 @@ func (a *NativeArchiver) Compress(dst, src string) error {
 	}
 
 	if err := gzipWriter.Close(); err != nil {
-		return fmt.Errorf("error closing gzip writer: %v", err)
+		return fmt.Errorf("error closing compressor: %v", err)
 	}
 
 	if err := dstFile.Close(); err != nil {
@@ -121,9 +146,9 @@ func (a *NativeArchiver) Decompress(src string) (string, error) {
 
 	defer srcFile.Close()
 
-	uncompressedStream, err := a.newGzipReader(srcFile)
+	uncompressedStream, err := a.newDecompressReader(srcFile)
 	if err != nil {
-		log.Errorf("error creating gzip reader: %v", err)
+		log.Errorf("error creating decompression reader: %v", err)
 		a.publishCorruptionMetric()
 		return "", err
 	}
@@ -133,8 +158,11 @@ func (a *NativeArchiver) Decompress(src string) (string, error) {
 	i := 0
 	tarReader := tar.NewReader(uncompressedStream)
 	restorationPath := ""
-	hadError := false
+	var failures int32
 	delayedDirectoryStats := []directoryStat{}
+	markFailed := func() { atomic.StoreInt32(&failures, 1) }
+	writer := newFileWriters(a.UnpackWorkers, markFailed)
+	defer writer.finish()
 
 	// We read all blocks in the tar archive.
 	// If an error is found when processing a particular tar block,
@@ -158,6 +186,7 @@ func (a *NativeArchiver) Decompress(src string) (string, error) {
 		}
 
 		i++
+		writer.waitIfPending(header.Name)
 		switch header.Typeflag {
 		case tar.TypeDir:
 			mode := header.FileInfo().Mode()
@@ -178,7 +207,7 @@ func (a *NativeArchiver) Decompress(src string) (string, error) {
 
 			if err := os.MkdirAll(header.Name, mode); err != nil {
 				log.Errorf("Error creating directory '%s': %v", header.Name, err)
-				hadError = true
+				markFailed()
 				continue
 			}
 
@@ -191,47 +220,41 @@ func (a *NativeArchiver) Decompress(src string) (string, error) {
 
 			if err := os.Symlink(header.Linkname, header.Name); err != nil {
 				log.Errorf("Error creating symlink '%s'-'%s': %v", header.Name, header.Linkname, err)
-				hadError = true
+				markFailed()
 				continue
 			}
 
 		case tar.TypeReg:
-			outFile, err := a.openFile(header, tarReader)
-			if err != nil {
-				log.Errorf("Error opening file '%s': %v", header.Name, err)
-				hadError = true
+			if writer.concurrent() && header.Size <= maxBufferedFileSize {
+				content := make([]byte, header.Size)
+				if _, err := io.ReadFull(tarReader, content); err != nil {
+					a.publishCorruptionMetric()
+					writer.finish()
+					return "", fmt.Errorf("error reading tar stream: %v", err)
+				}
+
+				writer.submit(a, header, content)
 				continue
 			}
 
-			if _, err := io.Copy(outFile, tarReader); err != nil {
-				log.Errorf("Error writing to file '%s': %v", header.Name, err)
-				hadError = true
-				_ = outFile.Close()
-				continue
-			}
-
-			if err := os.Chtimes(outFile.Name(), header.ModTime, header.ModTime); err != nil {
-				log.Errorf("Error changing timestamps for '%s': %v", header.Name, err)
-				hadError = true
-				continue
-			}
-
-			if err := outFile.Close(); err != nil {
-				log.Errorf("Error closing file handle for '%s': %v", header.Name, err)
-				hadError = true
+			if err := a.writeRegularFile(header, tarReader); err != nil {
+				log.Errorf("%v", err)
+				markFailed()
 				continue
 			}
 		}
 	}
+
+	writer.finish()
 
 	for _, d := range delayedDirectoryStats {
 		if err := os.Chmod(d.name, d.mode); err != nil {
 			log.Errorf("error changing mode of directory '%s': %v", d.name, err)
-			hadError = true
+			markFailed()
 		}
 	}
 
-	if hadError {
+	if atomic.LoadInt32(&failures) != 0 {
 		return restorationPath, fmt.Errorf("tar archive was not completely decompressed without errors")
 	}
 
@@ -273,20 +296,136 @@ func (a *NativeArchiver) openFile(header *tar.Header, tarReader *tar.Reader) (*o
 	return outFile, nil
 }
 
-func (a *NativeArchiver) newGzipWriter(dstFile *os.File) io.WriteCloser {
-	if a.UseParallelism {
-		return pgzip.NewWriter(dstFile)
+func (a *NativeArchiver) writeRegularFile(header *tar.Header, content io.Reader) error {
+	outFile, err := a.openFile(header, nil)
+	if err != nil {
+		return fmt.Errorf("Error opening file '%s': %v", header.Name, err)
 	}
 
-	return gzip.NewWriter(dstFile)
+	if _, err := io.Copy(outFile, content); err != nil {
+		_ = outFile.Close()
+		return fmt.Errorf("Error writing to file '%s': %v", header.Name, err)
+	}
+
+	if err := os.Chtimes(outFile.Name(), header.ModTime, header.ModTime); err != nil {
+		_ = outFile.Close()
+		return fmt.Errorf("Error changing timestamps for '%s': %v", header.Name, err)
+	}
+
+	if err := outFile.Close(); err != nil {
+		return fmt.Errorf("Error closing file handle for '%s': %v", header.Name, err)
+	}
+
+	return nil
 }
 
-func (a *NativeArchiver) newGzipReader(dstFile *os.File) (io.ReadCloser, error) {
-	if a.UseParallelism {
-		return pgzip.NewReader(dstFile)
+// fileWriters writes small regular files from a bounded pool of goroutines.
+type fileWriters struct {
+	jobs     chan fileJob
+	inflight sync.WaitGroup
+	pool     sync.WaitGroup
+	pending  map[string]struct{}
+	onError  func()
+	once     sync.Once
+}
+
+type fileJob struct {
+	archiver *NativeArchiver
+	header   *tar.Header
+	content  []byte
+}
+
+func newFileWriters(workers int, onError func()) *fileWriters {
+	w := &fileWriters{onError: onError, pending: map[string]struct{}{}}
+	if workers <= 1 {
+		return w
 	}
 
-	return gzip.NewReader(dstFile)
+	w.jobs = make(chan fileJob, workers*4)
+	for i := 0; i < workers; i++ {
+		w.pool.Add(1)
+		go func() {
+			defer w.pool.Done()
+			for job := range w.jobs {
+				if err := job.archiver.writeRegularFile(job.header, bytes.NewReader(job.content)); err != nil {
+					log.Errorf("%v", err)
+					w.onError()
+				}
+
+				w.inflight.Done()
+			}
+		}()
+	}
+
+	return w
+}
+
+func (w *fileWriters) concurrent() bool { return w.jobs != nil }
+
+func (w *fileWriters) submit(a *NativeArchiver, header *tar.Header, content []byte) {
+	w.pending[header.Name] = struct{}{}
+	w.inflight.Add(1)
+	w.jobs <- fileJob{archiver: a, header: header, content: content}
+}
+
+// waitIfPending drains the workers when an entry reuses a path still being written.
+func (w *fileWriters) waitIfPending(name string) {
+	if _, ok := w.pending[name]; ok {
+		w.inflight.Wait()
+		w.pending = map[string]struct{}{}
+	}
+}
+
+func (w *fileWriters) finish() {
+	w.once.Do(func() {
+		if w.jobs != nil {
+			close(w.jobs)
+			w.pool.Wait()
+		}
+	})
+}
+
+func (a *NativeArchiver) newCompressWriter(dstFile *os.File) (io.WriteCloser, error) {
+	if a.UseZstd {
+		level := zstd.SpeedDefault
+		if a.CompressionLevel != 0 {
+			level = zstd.EncoderLevelFromZstd(a.CompressionLevel)
+		}
+
+		return zstd.NewWriter(dstFile, zstd.WithEncoderLevel(level), zstd.WithEncoderConcurrency(runtime.GOMAXPROCS(0)))
+	}
+
+	level := gzip.DefaultCompression
+	if a.CompressionLevel != 0 {
+		level = a.CompressionLevel
+	}
+
+	if a.UseParallelism {
+		return pgzip.NewWriterLevel(dstFile, level)
+	}
+
+	return gzip.NewWriterLevel(dstFile, level)
+}
+
+// newDecompressReader picks gzip or zstd from the magic bytes, whatever the configured method.
+func (a *NativeArchiver) newDecompressReader(srcFile *os.File) (io.ReadCloser, error) {
+	buffered := bufio.NewReaderSize(srcFile, 1<<20)
+	magic, _ := buffered.Peek(len(zstdMagic))
+
+	if bytes.HasPrefix(magic, zstdMagic) {
+		decoder, err := zstd.NewReader(buffered, zstd.WithDecoderConcurrency(runtime.GOMAXPROCS(0)))
+		if err != nil {
+			return nil, err
+		}
+
+		return decoder.IOReadCloser(), nil
+	}
+
+	if a.UseParallelism {
+		return pgzip.NewReader(buffered)
+	}
+
+	return gzip.NewReader(buffered)
 }
 
 func (a *NativeArchiver) publishCorruptionMetric() {
