@@ -29,13 +29,13 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/nvm", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: ".nvmrc",
 				Entries: []LookupResultEntry{
 					{
 						Path: filepath.FromSlash(fmt.Sprintf("%s/.nvm", homedir)),
-						Keys: []string{fmt.Sprintf("master-nvm-%s", checksum)},
+						Keys: []string{fmt.Sprintf("some-branch-nvm-%s", checksum)},
 					},
 				},
 			},
@@ -47,13 +47,13 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/gems", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "Gemfile.lock",
 				Entries: []LookupResultEntry{
 					{
 						Path: filepath.FromSlash("vendor/bundle"),
-						Keys: []string{fmt.Sprintf("master-gems-%s", checksum)},
+						Keys: []string{fmt.Sprintf("some-branch-gems-%s", checksum)},
 					},
 				},
 			},
@@ -65,11 +65,11 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/npm", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "package-lock.json",
 				Entries: []LookupResultEntry{
-					{Path: "node_modules", Keys: []string{fmt.Sprintf("master-node-modules-%s", checksum)}},
+					{Path: "node_modules", Keys: []string{fmt.Sprintf("some-branch-node-modules-%s", checksum)}},
 				},
 			},
 		})
@@ -80,11 +80,11 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/pip", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "requirements.txt",
 				Entries: []LookupResultEntry{
-					{Path: ".pip_cache", Keys: []string{fmt.Sprintf("master-requirements-%s", checksum)}},
+					{Path: ".pip_cache", Keys: []string{fmt.Sprintf("some-branch-requirements-%s", checksum)}},
 				},
 			},
 		})
@@ -95,11 +95,11 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/composer", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "composer.lock",
 				Entries: []LookupResultEntry{
-					{Path: "vendor", Keys: []string{fmt.Sprintf("master-composer-%s", checksum)}},
+					{Path: "vendor", Keys: []string{fmt.Sprintf("some-branch-composer-%s", checksum)}},
 				},
 			},
 		})
@@ -110,11 +110,11 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/cocoapods", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "Podfile.lock",
 				Entries: []LookupResultEntry{
-					{Path: "Pods", Keys: []string{fmt.Sprintf("master-pods-%s", checksum)}},
+					{Path: "Pods", Keys: []string{fmt.Sprintf("some-branch-pods-%s", checksum)}},
 				},
 			},
 		})
@@ -125,13 +125,13 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/go", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "go.sum",
 				Entries: []LookupResultEntry{
 					{
 						Path: filepath.FromSlash(fmt.Sprintf("%s/go/pkg/mod", homedir)),
-						Keys: []string{fmt.Sprintf("master-go-%s", checksum)},
+						Keys: []string{fmt.Sprintf("some-branch-go-%s", checksum)},
 					},
 				},
 			},
@@ -143,13 +143,13 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/yarn", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "yarn.lock",
 				Entries: []LookupResultEntry{
 					{
 						Path: "node_modules",
-						Keys: []string{fmt.Sprintf("master-node-modules-%s", checksum)},
+						Keys: []string{fmt.Sprintf("some-branch-node-modules-%s", checksum)},
 					},
 				},
 			},
@@ -161,12 +161,12 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/elixir", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "mix.lock",
 				Entries: []LookupResultEntry{
-					{Path: "deps", Keys: []string{fmt.Sprintf("master-mix-deps-%s", checksum)}},
-					{Path: "_build", Keys: []string{fmt.Sprintf("master-mix-build-%s", checksum)}},
+					{Path: "deps", Keys: []string{fmt.Sprintf("some-branch-mix-deps-%s", checksum)}},
+					{Path: "_build", Keys: []string{fmt.Sprintf("some-branch-mix-build-%s", checksum)}},
 				},
 			},
 		})
@@ -177,12 +177,12 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/maven", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "pom.xml",
 				Entries: []LookupResultEntry{
-					{Path: ".m2", Keys: []string{fmt.Sprintf("master-maven-%s", checksum)}},
-					{Path: "target", Keys: []string{fmt.Sprintf("master-maven-target-%s", checksum)}},
+					{Path: ".m2", Keys: []string{fmt.Sprintf("some-branch-maven-%s", checksum)}},
+					{Path: "target", Keys: []string{fmt.Sprintf("some-branch-maven-target-%s", checksum)}},
 				},
 			},
 		})
@@ -196,17 +196,17 @@ func Test__LookupStore(t *testing.T) {
 		assert.Nil(t, err)
 
 		lookupDirectory := fmt.Sprintf("%s/test/autocache/multiple-files", rootPath)
-		assertLookupResults(t, Lookup(LookupOptions{Restore: false, LookupDirectory: lookupDirectory}), []LookupResult{
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", LookupDirectory: lookupDirectory}), []LookupResult{
 			{
 				DetectedFile: "package-lock.json",
 				Entries: []LookupResultEntry{
-					{Path: "node_modules", Keys: []string{fmt.Sprintf("master-node-modules-%s", packageLockChecksum)}},
+					{Path: "node_modules", Keys: []string{fmt.Sprintf("some-branch-node-modules-%s", packageLockChecksum)}},
 				},
 			},
 			{
 				DetectedFile: "requirements.txt",
 				Entries: []LookupResultEntry{
-					{Path: ".pip_cache", Keys: []string{fmt.Sprintf("master-requirements-%s", requirementsChecksum)}},
+					{Path: ".pip_cache", Keys: []string{fmt.Sprintf("some-branch-requirements-%s", requirementsChecksum)}},
 				},
 			},
 		})
@@ -241,8 +241,8 @@ func Test__LookupRestore(t *testing.T) {
 						Keys: []string{
 							fmt.Sprintf("some-branch-nvm-%s", checksum),
 							"some-branch-nvm",
-							"master-nvm",
 							"main-nvm",
+							"master-nvm",
 						},
 					},
 				},
@@ -264,8 +264,8 @@ func Test__LookupRestore(t *testing.T) {
 						Keys: []string{
 							fmt.Sprintf("some-branch-gems-%s", checksum),
 							"some-branch-gems",
-							"master-gems",
 							"main-gems",
+							"master-gems",
 						},
 					},
 				},
@@ -285,8 +285,8 @@ func Test__LookupRestore(t *testing.T) {
 					{Path: "node_modules", Keys: []string{
 						fmt.Sprintf("some-branch-node-modules-%s", checksum),
 						"some-branch-node-modules",
-						"master-node-modules",
 						"main-node-modules",
+						"master-node-modules",
 					}},
 				},
 			},
@@ -305,8 +305,8 @@ func Test__LookupRestore(t *testing.T) {
 					{Path: ".pip_cache", Keys: []string{
 						fmt.Sprintf("some-branch-requirements-%s", checksum),
 						"some-branch-requirements",
-						"master-requirements",
 						"main-requirements",
+						"master-requirements",
 					}},
 				},
 			},
@@ -325,8 +325,8 @@ func Test__LookupRestore(t *testing.T) {
 					{Path: "vendor", Keys: []string{
 						fmt.Sprintf("some-branch-composer-%s", checksum),
 						"some-branch-composer",
-						"master-composer",
 						"main-composer",
+						"master-composer",
 					}},
 				},
 			},
@@ -345,8 +345,8 @@ func Test__LookupRestore(t *testing.T) {
 					{Path: "Pods", Keys: []string{
 						fmt.Sprintf("some-branch-pods-%s", checksum),
 						"some-branch-pods",
-						"master-pods",
 						"main-pods",
+						"master-pods",
 					}},
 				},
 			},
@@ -367,8 +367,8 @@ func Test__LookupRestore(t *testing.T) {
 						Keys: []string{
 							fmt.Sprintf("some-branch-go-%s", checksum),
 							"some-branch-go",
-							"master-go",
 							"main-go",
+							"master-go",
 						},
 					},
 				},
@@ -390,8 +390,8 @@ func Test__LookupRestore(t *testing.T) {
 						Keys: []string{
 							fmt.Sprintf("some-branch-node-modules-%s", checksum),
 							"some-branch-node-modules",
-							"master-node-modules",
 							"main-node-modules",
+							"master-node-modules",
 						},
 					},
 				},
@@ -411,14 +411,14 @@ func Test__LookupRestore(t *testing.T) {
 					{Path: "deps", Keys: []string{
 						fmt.Sprintf("some-branch-mix-deps-%s", checksum),
 						"some-branch-mix-deps",
-						"master-mix-deps",
 						"main-mix-deps",
+						"master-mix-deps",
 					}},
 					{Path: "_build", Keys: []string{
 						fmt.Sprintf("some-branch-mix-build-%s", checksum),
 						"some-branch-mix-build",
-						"master-mix-build",
 						"main-mix-build",
+						"master-mix-build",
 					}},
 				},
 			},
@@ -437,14 +437,14 @@ func Test__LookupRestore(t *testing.T) {
 					{Path: ".m2", Keys: []string{
 						fmt.Sprintf("some-branch-maven-%s", checksum),
 						"some-branch-maven",
-						"master-maven",
 						"main-maven",
+						"master-maven",
 					}},
 					{Path: "target", Keys: []string{
 						fmt.Sprintf("some-branch-maven-target-%s", checksum),
 						"some-branch-maven-target",
-						"master-maven-target",
 						"main-maven-target",
+						"master-maven-target",
 					}},
 				},
 			},
@@ -466,8 +466,8 @@ func Test__LookupRestore(t *testing.T) {
 					{Path: "node_modules", Keys: []string{
 						fmt.Sprintf("some-branch-node-modules-%s", packageLockChecksum),
 						"some-branch-node-modules",
-						"master-node-modules",
 						"main-node-modules",
+						"master-node-modules",
 					}},
 				},
 			},
@@ -477,8 +477,8 @@ func Test__LookupRestore(t *testing.T) {
 					{Path: ".pip_cache", Keys: []string{
 						fmt.Sprintf("some-branch-requirements-%s", requirementsChecksum),
 						"some-branch-requirements",
-						"master-requirements",
 						"main-requirements",
+						"master-requirements",
 					}},
 				},
 			},
@@ -522,6 +522,147 @@ func Test__LookupRestore(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("only default branch fallbacks without a branch", func(t *testing.T) {
+		lookupDirectory := fmt.Sprintf("%s/test/autocache/npm", rootPath)
+		assertLookupResults(t, Lookup(LookupOptions{Restore: true, LookupDirectory: lookupDirectory}), []LookupResult{
+			{
+				DetectedFile: "package-lock.json",
+				Entries: []LookupResultEntry{
+					{Path: "node_modules", Keys: []string{
+						"main-node-modules",
+						"master-node-modules",
+					}},
+				},
+			},
+		})
+	})
+
+	t.Run("falls back to the configured default branch only", func(t *testing.T) {
+		checksum, err := GenerateChecksum(fmt.Sprintf("%s/test/autocache/npm/package-lock.json", rootPath))
+		assert.Nil(t, err)
+
+		lookupDirectory := fmt.Sprintf("%s/test/autocache/npm", rootPath)
+		assertLookupResults(t, Lookup(LookupOptions{Restore: true, GitBranch: "some-branch", DefaultBranch: "develop", LookupDirectory: lookupDirectory}), []LookupResult{
+			{
+				DetectedFile: "package-lock.json",
+				Entries: []LookupResultEntry{
+					{Path: "node_modules", Keys: []string{
+						fmt.Sprintf("some-branch-node-modules-%s", checksum),
+						"some-branch-node-modules",
+						"develop-node-modules",
+					}},
+				},
+			},
+		})
+	})
+}
+
+func Test__LookupDirectoryScope(t *testing.T) {
+	homedir, _ := os.UserHomeDir()
+
+	_, b, _, _ := runtime.Caller(0)
+	testFilePath := filepath.Dir(b)
+	pkgPath := filepath.Dir(testFilePath)
+	rootPath := filepath.Dir(pkgPath)
+
+	t.Run("keeps keys unscoped in the root directory", func(t *testing.T) {
+		checksum, err := GenerateChecksum(fmt.Sprintf("%s/test/autocache/yarn/yarn.lock", rootPath))
+		assert.Nil(t, err)
+
+		lookupDirectory := fmt.Sprintf("%s/test/autocache/yarn", rootPath)
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", RootDirectory: lookupDirectory, LookupDirectory: lookupDirectory}), []LookupResult{
+			{
+				DetectedFile: "yarn.lock",
+				Entries: []LookupResultEntry{
+					{Path: "node_modules", Keys: []string{fmt.Sprintf("some-branch-node-modules-%s", checksum)}},
+				},
+			},
+		})
+	})
+
+	t.Run("scopes store keys of a nested directory", func(t *testing.T) {
+		checksum, err := GenerateChecksum(fmt.Sprintf("%s/test/autocache/yarn/yarn.lock", rootPath))
+		assert.Nil(t, err)
+
+		lookupDirectory := fmt.Sprintf("%s/test/autocache/yarn", rootPath)
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", RootDirectory: rootPath, LookupDirectory: lookupDirectory}), []LookupResult{
+			{
+				DetectedFile: "yarn.lock",
+				Entries: []LookupResultEntry{
+					{Path: "node_modules", Keys: []string{fmt.Sprintf("some-branch-node-modules@test-autocache-yarn-%s", checksum)}},
+				},
+			},
+		})
+	})
+
+	t.Run("scopes every restore key of a nested directory", func(t *testing.T) {
+		checksum, err := GenerateChecksum(fmt.Sprintf("%s/test/autocache/yarn/yarn.lock", rootPath))
+		assert.Nil(t, err)
+
+		rootDirectory := fmt.Sprintf("%s/test/autocache", rootPath)
+		lookupDirectory := fmt.Sprintf("%s/test/autocache/yarn", rootPath)
+		assertLookupResults(t, Lookup(LookupOptions{Restore: true, GitBranch: "some-branch", RootDirectory: rootDirectory, LookupDirectory: lookupDirectory}), []LookupResult{
+			{
+				DetectedFile: "yarn.lock",
+				Entries: []LookupResultEntry{
+					{Path: "node_modules", Keys: []string{
+						fmt.Sprintf("some-branch-node-modules@yarn-%s", checksum),
+						"some-branch-node-modules@yarn",
+						"main-node-modules@yarn",
+						"master-node-modules@yarn",
+					}},
+				},
+			},
+		})
+	})
+
+	t.Run("does not scope paths outside the directory", func(t *testing.T) {
+		checksum, err := GenerateChecksum(fmt.Sprintf("%s/test/autocache/nvm/.nvmrc", rootPath))
+		assert.Nil(t, err)
+
+		lookupDirectory := fmt.Sprintf("%s/test/autocache/nvm", rootPath)
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", RootDirectory: rootPath, LookupDirectory: lookupDirectory}), []LookupResult{
+			{
+				DetectedFile: ".nvmrc",
+				Entries: []LookupResultEntry{
+					{
+						Path: filepath.FromSlash(fmt.Sprintf("%s/.nvm", homedir)),
+						Keys: []string{fmt.Sprintf("some-branch-nvm-%s", checksum)},
+					},
+				},
+			},
+		})
+	})
+
+	t.Run("ignores a root directory outside the lookup directory", func(t *testing.T) {
+		checksum, err := GenerateChecksum(fmt.Sprintf("%s/test/autocache/yarn/yarn.lock", rootPath))
+		assert.Nil(t, err)
+
+		rootDirectory := fmt.Sprintf("%s/test/autocache/npm", rootPath)
+		lookupDirectory := fmt.Sprintf("%s/test/autocache/yarn", rootPath)
+		assertLookupResults(t, Lookup(LookupOptions{Restore: false, GitBranch: "some-branch", RootDirectory: rootDirectory, LookupDirectory: lookupDirectory}), []LookupResult{
+			{
+				DetectedFile: "yarn.lock",
+				Entries: []LookupResultEntry{
+					{Path: "node_modules", Keys: []string{fmt.Sprintf("some-branch-node-modules-%s", checksum)}},
+				},
+			},
+		})
+	})
+}
+
+func Test__IsAutomaticKeyFor(t *testing.T) {
+	checksum := "a0f1a9a1d9776398da24a9857f85ccc7"
+
+	assert.True(t, IsAutomaticKeyFor("main-node-modules", "main-node-modules-"+checksum))
+	assert.True(t, IsAutomaticKeyFor("main-node-modules@e2e", "main-node-modules@e2e-"+checksum))
+
+	assert.False(t, IsAutomaticKeyFor("main-node-modules", "main-node-modules@e2e-"+checksum))
+	assert.False(t, IsAutomaticKeyFor("main-node-modules@e2e", "main-node-modules-"+checksum))
+	assert.False(t, IsAutomaticKeyFor("main-node-modules", "release-main-node-modules-"+checksum))
+	assert.False(t, IsAutomaticKeyFor("main-node-modules", "main-node-modules-"+checksum+"-old"))
+	assert.False(t, IsAutomaticKeyFor("main-node-modules", "main-node-modules"))
 }
 
 func assertLookupResults(t *testing.T, actualResults []LookupResult, expectedResults []LookupResult) {

@@ -45,8 +45,10 @@ func RunRestore(cmd *cobra.Command, args []string) {
 
 	if len(args) == 0 {
 		lookupResults := files.Lookup(files.LookupOptions{
-			GitBranch: FindGitBranch(),
-			Restore:   true,
+			RootDirectory: FindGitRoot(),
+			GitBranch:     FindGitBranch(),
+			DefaultBranch: os.Getenv("NEETO_CI_DEFAULT_BRANCH"),
+			Restore:       true,
 		})
 
 		if len(lookupResults) == 0 {
@@ -64,18 +66,20 @@ func RunRestore(cmd *cobra.Command, args []string) {
 				go func(entry files.LookupResultEntry) {
 					defer wg.Done()
 					log.Infof("Fetching '%s' directory with cache keys '%s'...", entry.Path, strings.Join(entry.Keys, ","))
-					downloadAndUnpack(storage, archiver, metricsManager, entry.Keys)
+					downloadAndUnpack(storage, archiver, metricsManager, entry.Keys, findAutomaticKey)
 				}(entry)
 			}
 		}
 		wg.Wait()
 	} else {
 		keys := strings.Split(args[0], ",")
-		downloadAndUnpack(storage, archiver, metricsManager, keys)
+		downloadAndUnpack(storage, archiver, metricsManager, keys, findMatchingKey)
 	}
 }
 
-func downloadAndUnpack(storage storage.Storage, archiver archive.Archiver, metricsManager metrics.MetricsManager, keys []string) {
+type keyMatcher func(availableKeys []storage.CacheKey, match string) string
+
+func downloadAndUnpack(storage storage.Storage, archiver archive.Archiver, metricsManager metrics.MetricsManager, keys []string, findKey keyMatcher) {
 	for _, rawKey := range keys {
 		key := NormalizeKey(rawKey)
 		if ok, _ := storage.HasKey(key); ok {
@@ -87,7 +91,7 @@ func downloadAndUnpack(storage storage.Storage, archiver archive.Archiver, metri
 		availableKeys, err := storage.List()
 		utils.Check(err)
 
-		matchingKey := findMatchingKey(availableKeys, key)
+		matchingKey := findKey(availableKeys, key)
 		if matchingKey != "" {
 			log.Infof("HIT: '%s', using key '%s'.", key, matchingKey)
 			downloadAndUnpackKey(storage, archiver, metricsManager, matchingKey)
@@ -102,6 +106,16 @@ func findMatchingKey(availableKeys []storage.CacheKey, match string) string {
 	for _, availableKey := range availableKeys {
 		isMatch, _ := regexp.MatchString(match, availableKey.Name)
 		if isMatch {
+			return availableKey.Name
+		}
+	}
+
+	return ""
+}
+
+func findAutomaticKey(availableKeys []storage.CacheKey, fallbackKey string) string {
+	for _, availableKey := range availableKeys {
+		if files.IsAutomaticKeyFor(fallbackKey, availableKey.Name) {
 			return availableKey.Name
 		}
 	}
