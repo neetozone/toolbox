@@ -15,10 +15,14 @@ import (
 func captureGitWarnings(t *testing.T) *bytes.Buffer {
 	var buffer bytes.Buffer
 	previous := log.StandardLogger().Out
+	previousFormatter := log.StandardLogger().Formatter
 	log.SetOutput(&buffer)
+	// Other tests install a formatter that drops the level, so set our own.
+	log.SetFormatter(&log.TextFormatter{DisableColors: true, DisableTimestamp: true})
 	gitWarningOnce = sync.Once{}
 	t.Cleanup(func() {
 		log.SetOutput(previous)
+		log.SetFormatter(previousFormatter)
 		gitWarningOnce = sync.Once{}
 	})
 
