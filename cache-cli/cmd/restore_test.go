@@ -48,7 +48,7 @@ func Test__Restore(t *testing.T) {
 			_ = tempFile.Close()
 
 			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
-			compressAndStore(storage, archiver, "abc-001", tempDir)
+			compressAndStore(storage, archiver, "abc-001", tempDir, nil)
 			RunRestore(restoreCmd, []string{"abc-001"})
 			output := readOutputFromFile(t)
 
@@ -68,7 +68,7 @@ func Test__Restore(t *testing.T) {
 			_ = tempFile.Close()
 
 			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
-			compressAndStore(storage, archiver, "abc/00/22", tempDir)
+			compressAndStore(storage, archiver, "abc/00/22", tempDir, nil)
 			RunRestore(restoreCmd, []string{"abc/00/22"})
 			output := readOutputFromFile(t)
 
@@ -89,7 +89,7 @@ func Test__Restore(t *testing.T) {
 			_ = tempFile.Close()
 
 			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
-			compressAndStore(storage, archiver, "abc-001", tempDir)
+			compressAndStore(storage, archiver, "abc-001", tempDir, nil)
 			RunRestore(restoreCmd, []string{"abc"})
 			output := readOutputFromFile(t)
 
@@ -109,8 +109,8 @@ func Test__Restore(t *testing.T) {
 			_ = tempFile.Close()
 
 			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
-			compressAndStore(storage, archiver, "abc-001", tempDir)
-			compressAndStore(storage, archiver, "abc-002", tempDir)
+			compressAndStore(storage, archiver, "abc-001", tempDir, nil)
+			compressAndStore(storage, archiver, "abc-002", tempDir, nil)
 			RunRestore(restoreCmd, []string{"abc-001,abc-002"})
 			output := readOutputFromFile(t)
 
@@ -131,7 +131,7 @@ func Test__Restore(t *testing.T) {
 			_ = tempFile.Close()
 
 			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
-			compressAndStore(storage, archiver, "abc", tempDir)
+			compressAndStore(storage, archiver, "abc", tempDir, nil)
 			RunRestore(restoreCmd, []string{"abc-001,abc"})
 			output := readOutputFromFile(t)
 
@@ -152,7 +152,7 @@ func Test__Restore(t *testing.T) {
 			_ = tempFile.Close()
 
 			archiver := archive.NewShellOutArchiver(metrics.NewNoOpMetricsManager())
-			compressAndStore(storage, archiver, "abc", tempDir)
+			compressAndStore(storage, archiver, "abc", tempDir, nil)
 			RunRestore(restoreCmd, []string{"^abc"})
 			output := readOutputFromFile(t)
 

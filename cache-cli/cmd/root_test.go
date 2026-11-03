@@ -13,8 +13,8 @@ import (
 )
 
 // The automatic-cache fixtures sit in a nested directory of the repository,
-// so their relative-path keys are scoped to it.
-const gemsKeyPrefix = "gems@cache-cli-test-autocache-gems"
+// so their relative-path keys are scoped to it. The fixture has no Ruby version.
+var gemsKeyPrefix = "gems-" + runtime.GOARCH + "@cache-cli-test-autocache-gems"
 
 type TestBackend struct {
 	envVars      map[string]string

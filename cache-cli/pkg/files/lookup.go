@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -45,6 +46,8 @@ type LookupResult struct {
 type LookupResultEntry struct {
 	Keys []string
 	Path string
+	// Default-branch keys with the same checksum; storing is skipped if one exists.
+	EquivalentKeys []string
 }
 
 func Lookup(options LookupOptions) []LookupResult {
@@ -108,7 +111,7 @@ func resultForfile(filePath, scope string, options LookupOptions) *LookupResult 
 		})
 	case "Gemfile.lock":
 		return buildResult(filePath, scope, options, []buildResultRequest{
-			{"gems", "vendor/bundle"},
+			{gemsKeyPrefix(filepath.Dir(filePath)), "vendor/bundle"},
 		})
 	case "package-lock.json":
 		return buildResult(filePath, scope, options, []buildResultRequest{
@@ -178,8 +181,9 @@ func buildResult(filePath, scope string, options LookupOptions, entries []buildR
 		} else {
 			key := fmt.Sprintf("%s-%s-%s", gitBranch, keyPrefix, checksum)
 			newEntries = append(newEntries, LookupResultEntry{
-				Keys: []string{key},
-				Path: filepath.FromSlash(entry.Path),
+				Keys:           []string{key},
+				Path:           filepath.FromSlash(entry.Path),
+				EquivalentKeys: equivalentKeys(keyPrefix, gitBranch, checksum, defaultBranches(options)),
 			})
 		}
 	}
@@ -211,10 +215,13 @@ func defaultBranches(options LookupOptions) []string {
 func keysForRestore(keyPrefix, gitBranch, checksum string, defaultBranches []string) []string {
 	keys := []string{}
 	if gitBranch != "" {
-		keys = append(keys,
-			fmt.Sprintf("%s-%s-%s", gitBranch, keyPrefix, checksum),
-			fmt.Sprintf("%s-%s", gitBranch, keyPrefix),
-		)
+		keys = append(keys, fmt.Sprintf("%s-%s-%s", gitBranch, keyPrefix, checksum))
+	}
+
+	// Exact default-branch keys: a single HEAD hit, no listing needed.
+	keys = append(keys, equivalentKeys(keyPrefix, gitBranch, checksum, defaultBranches)...)
+	if gitBranch != "" {
+		keys = append(keys, fmt.Sprintf("%s-%s", gitBranch, keyPrefix))
 	}
 
 	for _, defaultBranch := range defaultBranches {
@@ -232,4 +239,53 @@ func keysForRestore(keyPrefix, gitBranch, checksum string, defaultBranches []str
 func IsAutomaticKeyFor(fallbackKey, key string) bool {
 	prefix := fallbackKey + "-"
 	return strings.HasPrefix(key, prefix) && checksumPattern.MatchString(strings.TrimPrefix(key, prefix))
+}
+
+func equivalentKeys(keyPrefix, gitBranch, checksum string, defaultBranches []string) []string {
+	keys := []string{}
+	for _, defaultBranch := range defaultBranches {
+		if gitBranch != defaultBranch {
+			keys = append(keys, fmt.Sprintf("%s-%s-%s", defaultBranch, keyPrefix, checksum))
+		}
+	}
+
+	return keys
+}
+
+// gemsKeyPrefix scopes the gems key to the Ruby version and arch, so a
+// fallback never restores gems built for another Ruby or architecture.
+func gemsKeyPrefix(dir string) string {
+	prefix := "gems"
+	if version := rubyVersion(dir); version != "" {
+		prefix += "-ruby" + version
+	}
+
+	return prefix + "-" + runtime.GOARCH
+}
+
+var (
+	rubyVersionFormat   = regexp.MustCompile(`^[0-9A-Za-z._]+$`)
+	gemfileLockRubyLine = regexp.MustCompile(`(?m)^RUBY VERSION\s*\n\s+ruby (\d+(?:\.\d+)*)`)
+)
+
+func rubyVersion(dir string) string {
+	if content, err := os.ReadFile(filepath.Join(dir, ".ruby-version")); err == nil {
+		version := strings.TrimPrefix(strings.TrimSpace(string(content)), "ruby-")
+		if rubyVersionFormat.MatchString(version) {
+			return version
+		}
+	}
+
+	if content, err := os.ReadFile(filepath.Join(dir, "Gemfile.lock")); err == nil {
+		if match := gemfileLockRubyLine.FindSubmatch(content); match != nil {
+			return string(match[1])
+		}
+	}
+
+	version := strings.TrimPrefix(strings.TrimSpace(os.Getenv("RBENV_VERSION")), "ruby-")
+	if rubyVersionFormat.MatchString(version) {
+		return version
+	}
+
+	return ""
 }

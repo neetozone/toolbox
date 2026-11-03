@@ -68,6 +68,7 @@ func RunStore(cmd *cobra.Command, args []string) {
 		lookupResults := files.Lookup(files.LookupOptions{
 			RootDirectory: FindGitRoot(),
 			GitBranch:     gitBranch,
+			DefaultBranch: os.Getenv("NEETO_CI_DEFAULT_BRANCH"),
 			Restore:       false,
 		})
 
@@ -86,23 +87,30 @@ func RunStore(cmd *cobra.Command, args []string) {
 				go func(entry files.LookupResultEntry) {
 					defer wg.Done()
 					log.Infof("Using default cache path '%s'.", entry.Path)
-					compressAndStore(storage, archiver, entry.Keys[0], entry.Path)
+					compressAndStore(storage, archiver, entry.Keys[0], entry.Path, entry.EquivalentKeys)
 				}(entry)
 			}
 		}
 		wg.Wait()
 	} else {
 		path := filepath.FromSlash(args[1])
-		compressAndStore(storage, archiver, args[0], path)
+		compressAndStore(storage, archiver, args[0], path, nil)
 	}
 }
 
-func compressAndStore(storage storage.Storage, archiver archive.Archiver, rawKey, path string) {
+func compressAndStore(storage storage.Storage, archiver archive.Archiver, rawKey, path string, equivalentKeys []string) {
 	key := NormalizeKey(rawKey)
 	if _, err := os.Stat(path); err == nil {
 		if ok, _ := storage.HasKey(key); ok {
 			log.Infof("Key '%s' already exists.", key)
 			return
+		}
+
+		for _, equivalentKey := range equivalentKeys {
+			if ok, _ := storage.HasKey(NormalizeKey(equivalentKey)); ok {
+				log.Infof("Key '%s' skipped: identical content already cached as '%s'.", key, equivalentKey)
+				return
+			}
 		}
 
 		compressedFilePath, compressedFileSize, err := compress(archiver, key, path)

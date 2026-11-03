@@ -79,26 +79,37 @@ func RunRestore(cmd *cobra.Command, args []string) {
 
 type keyMatcher func(availableKeys []storage.CacheKey, match string) string
 
-func downloadAndUnpack(storage storage.Storage, archiver archive.Archiver, metricsManager metrics.MetricsManager, keys []string, findKey keyMatcher) {
+func downloadAndUnpack(store storage.Storage, archiver archive.Archiver, metricsManager metrics.MetricsManager, keys []string, findKey keyMatcher) {
+	normalizedKeys := make([]string, 0, len(keys))
 	for _, rawKey := range keys {
-		key := NormalizeKey(rawKey)
-		if ok, _ := storage.HasKey(key); ok {
+		normalizedKeys = append(normalizedKeys, NormalizeKey(rawKey))
+	}
+
+	// Exact keys first: a HEAD request each, and no listing when one hits.
+	for index, key := range normalizedKeys {
+		if ok, _ := store.HasKey(key); ok {
+			for _, missed := range normalizedKeys[:index] {
+				log.Infof("MISS: '%s'.", missed)
+			}
+
 			log.Infof("HIT: '%s', using key '%s'.", key, key)
-			downloadAndUnpackKey(storage, archiver, metricsManager, key)
-			break
+			downloadAndUnpackKey(store, archiver, metricsManager, key)
+			return
 		}
+	}
 
-		availableKeys, err := storage.List()
-		utils.Check(err)
+	availableKeys, err := store.List()
+	utils.Check(err)
 
+	for _, key := range normalizedKeys {
 		matchingKey := findKey(availableKeys, key)
 		if matchingKey != "" {
 			log.Infof("HIT: '%s', using key '%s'.", key, matchingKey)
-			downloadAndUnpackKey(storage, archiver, metricsManager, matchingKey)
-			break
-		} else {
-			log.Infof("MISS: '%s'.", key)
+			downloadAndUnpackKey(store, archiver, metricsManager, matchingKey)
+			return
 		}
+
+		log.Infof("MISS: '%s'.", key)
 	}
 }
 
