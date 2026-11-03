@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -19,13 +18,25 @@ func (s *S3Storage) Store(key, path string) error {
 
 	destination := fmt.Sprintf("%s/%s", s.Project, key)
 	uploader := manager.NewUploader(s.Client)
-	_, err = uploader.Upload(context.TODO(), &s3.PutObjectInput{
+	ctx, stop := uploadContext()
+	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: &s.Bucket,
 		Key:    &destination,
 		Body:   file,
 	})
+	interruption := stop()
+
+	if interruption != nil {
+		if err != nil {
+			s.abortInterruptedUpload(destination, err)
+		}
+
+		_ = file.Close()
+		exitOnSignal(interruption)
+	}
 
 	if err != nil {
+		_ = file.Close()
 		log.Errorf("Error uploading: %v", err)
 		return err
 	}
