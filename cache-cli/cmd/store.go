@@ -132,7 +132,10 @@ func compressAndStore(storage storage.Storage, archiver archive.Archiver, rawKey
 		uploadStart := time.Now()
 		log.Infof("Uploading '%s' with cache key '%s'...", path, key)
 		err = storage.Store(key, compressedFilePath)
-		utils.Check(err)
+		if err != nil {
+			_ = os.Remove(compressedFilePath)
+			utils.Check(fmt.Errorf("storing key '%s': %w", key, err))
+		}
 
 		uploadDuration := time.Since(uploadStart)
 		log.Infof("Upload complete. Duration: %v.", uploadDuration)
@@ -150,7 +153,7 @@ func compress(archiver archive.Archiver, key, path string) (string, int64, error
 	compressingStart := time.Now()
 	log.Infof("Compressing %s...", path)
 
-	dst := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%d", key, time.Now().Nanosecond()))
+	dst := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%d", utils.TempFilePrefix(key), time.Now().Nanosecond()))
 	err := archiver.Compress(dst, path)
 	utils.Check(err)
 

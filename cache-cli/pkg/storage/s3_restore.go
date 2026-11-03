@@ -8,10 +8,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/semaphoreci/toolbox/cache-cli/pkg/utils"
 )
 
 func (s *S3Storage) Restore(key string) (*os.File, error) {
-	tempFile, err := ioutil.TempFile(os.TempDir(), fmt.Sprintf("%s-*", key))
+	tempFile, err := ioutil.TempFile(os.TempDir(), fmt.Sprintf("%s-*", utils.TempFilePrefix(key)))
 	if err != nil {
 		return nil, err
 	}
@@ -30,6 +31,7 @@ func (s *S3Storage) Restore(key string) (*os.File, error) {
 
 	if err != nil {
 		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
 		return nil, err
 	}
 

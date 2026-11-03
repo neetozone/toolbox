@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+
+	"github.com/semaphoreci/toolbox/cache-cli/pkg/utils"
 )
 
 func (s *SFTPStorage) Restore(key string) (*os.File, error) {
-	localFile, err := ioutil.TempFile(os.TempDir(), fmt.Sprintf("%s-*", key))
+	localFile, err := ioutil.TempFile(os.TempDir(), fmt.Sprintf("%s-*", utils.TempFilePrefix(key)))
 	if err != nil {
 		return nil, err
 	}
