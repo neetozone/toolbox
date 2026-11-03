@@ -35,6 +35,9 @@ func RunRestore(cmd *cobra.Command, args []string) {
 		return
 	}
 
+	types, err := onlyTypes(cmd, args)
+	exitOnUsageError(cmd, err)
+
 	storage, err := storage.InitStorage()
 	utils.Check(err)
 
@@ -44,12 +47,12 @@ func RunRestore(cmd *cobra.Command, args []string) {
 	archiver := archive.NewArchiver(metricsManager)
 
 	if len(args) == 0 {
-		lookupResults := files.Lookup(files.LookupOptions{
+		lookupResults := lookupAutomatic(files.LookupOptions{
 			RootDirectory: FindGitRoot(),
 			GitBranch:     FindGitBranch(),
 			DefaultBranch: os.Getenv("NEETO_CI_DEFAULT_BRANCH"),
 			Restore:       true,
-		})
+		}, types)
 
 		if len(lookupResults) == 0 {
 			log.Info("Nothing to restore from cache.")
@@ -200,5 +203,6 @@ func getCacheServerIP() string {
 }
 
 func init() {
+	addOnlyFlag(restoreCmd)
 	RootCmd.AddCommand(restoreCmd)
 }
