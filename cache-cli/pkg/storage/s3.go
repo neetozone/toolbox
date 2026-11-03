@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/ec2rolecreds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	log "github.com/sirupsen/logrus"
+	"github.com/semaphoreci/toolbox/cache-cli/pkg/logging"
 )
 
 type S3Storage struct {
@@ -40,7 +40,7 @@ func createDefaultS3Storage(s3Bucket, project string, storageConfig StorageConfi
 
 	// Using EC2 metadata service to retrieve credentials for the instance profile
 	if os.Getenv("NEETO_CI_CACHE_USE_EC2_INSTANCE_PROFILE") == "true" {
-		log.Infof("Using EC2 instance profile.")
+		logging.Diagnostic.Infof("Using EC2 instance profile.")
 		config, err = awsConfig.LoadDefaultConfig(
 			context.TODO(),
 			awsConfig.WithCredentialsProvider(ec2rolecreds.New()),
@@ -62,7 +62,7 @@ func createDefaultS3Storage(s3Bucket, project string, storageConfig StorageConfi
 	// Using an existing profile configured in one of the default configuration files.
 	profile := os.Getenv("NEETO_CI_CACHE_AWS_PROFILE")
 	if profile != "" {
-		log.Infof("Using '%s' AWS profile.", profile)
+		logging.Diagnostic.Infof("Using '%s' AWS profile.", profile)
 		config, err = awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithSharedConfigProfile(profile))
 		if err != nil {
 			return nil, err
