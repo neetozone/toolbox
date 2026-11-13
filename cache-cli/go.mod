@@ -1,6 +1,6 @@
 module github.com/semaphoreci/toolbox/cache-cli
 
-go 1.18
+go 1.24
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.9.0
@@ -28,7 +28,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.15.13
+	github.com/klauspost/compress v1.18.7
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
